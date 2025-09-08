@@ -39,6 +39,11 @@ CSV file, which should include the columns `Name`, `Email`,
 `Learning`, and `Ringing`, the latter two being semicolon-delimited
 lists of method names.
 
+Details of a ringer can also be imported from a JSON file with
+`--import`, these files being produced with `--export`, which allows
+ringers to keep their own records and provide them when registering
+with another BandPlacer session.
+
 Listing the data
 ----------------
 
@@ -63,4 +68,5 @@ Reading results
 
 There are two options for reading the touches files with their
 results: `--score` to read a specific file, and `--update` to read any
-touch files that have not yet been incorporated into the records file.
+files in the touch directoy that have not yet been incorporated into
+the records file.

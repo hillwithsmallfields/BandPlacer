@@ -5,6 +5,9 @@ BandPlacer is configured using a JSON or YAML file.
 
 The main sections are `Placing` and `Scoring`.
 
+Placing
+-------
+
 The `Placing` section controls the placing of ringers in a band,
 switching between adding learners and adding helpers.  This is done
 using the total score of those placed so far.
@@ -16,3 +19,10 @@ each touch.
 
 `Placing:Upper` is the level at which it can switch back from adding
 helpers to adding more learners.
+
+Scoring
+-------
+
+`Scoring:Increment` and `Scoring:Decrement` set the amounts to be
+added or subtracted on successful or unsuccessful completion of a
+place bell.

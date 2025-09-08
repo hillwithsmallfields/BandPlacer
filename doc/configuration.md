@@ -3,7 +3,14 @@ Configuring BandPlacer
 
 BandPlacer is configured using a JSON or YAML file.
 
-The main sections are `Placing` and `Scoring`.
+The main sections are `Files`, `Placing` and `Scoring`.
+
+Files
+-----
+
+`Files:Records` names the records file.
+
+`Files:TouchDirectory` names the touch directory.
 
 Placing
 -------

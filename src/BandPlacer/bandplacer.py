@@ -7,6 +7,7 @@ repetition.
 """
 
 import argparse
+import cmd
 import collections
 import csv
 import datetime
@@ -193,18 +194,24 @@ class Touch:
 
     """A piece of ringing, made up of at least one call."""
 
-    def __init__(self, practice, ringers=ringers):
+    def __init__(self, practice, method_name, ringers=None):
         self.practice = practice
-        self.ringers = ringers
+        self.method_name = method_name
+        self.ringers = ringers or []
 
     def _filename(self, number):
-        return os.path.join(self.practice.touch_directory,
-                            "%06d.csv" % number)
+        result = os.path.join(self.practice.touch_directory,
+                              "%06d.csv" % number)
+        print("touch filename is", result)
+        return result
 
     def save(self, number):
         with open(self._filename(number), 'w') as ts:
-            writer = csv.DictWriter(ts, fieldnames=['Bell', 'Ringer', 'Score'])
-            pass # TODO
+            writer = csv.DictWriter(ts, fieldnames=['Bell', 'Ringer', 'Score', 'Method'])
+            writer.writeheader()
+            writer.writerow({'Method': self.method_name})
+            for i, ringer in enumerate(self.ringers):
+                writer.writerow({'Bell': i+1, 'Ringer': ringer})
 
     def load(self, number):
         pass # TODO
@@ -231,6 +238,7 @@ def worst_leads_except(ringers_scores, not_these):
             for ringer, scores in ringers_scores.items()}
 
 def key_of_lowest_value(dictionary):
+    """Return the key corresponding to the lowest value in the dictionary."""
     lowest_k = None
     lowest_v = LARGE_POSITIVE_NUMBER
     for k, v in dictionary.items():
@@ -239,12 +247,22 @@ def key_of_lowest_value(dictionary):
             lowest_v = v
     return lowest_k
 
-class Practice:
+def _row_methods(row, col_label):
+    """Return the method names from a CSV table cell.
+    Within the cell, they should be semicolon-separated."""
+    if (col_label not in row
+        or not row[col_label]):
+        return []
+    return [name.strip()
+            for name in row[col_label].split(';')]
+
+class Practice(cmd.Cmd):
 
     """A session for practicing ringing."""
 
     def __init__(self,
                  config_file=None,
+                 records_file=None,
                  touch_directory=None,
                  ringers=None,
                  methods=None):
@@ -267,6 +285,7 @@ class Practice:
                     self.config = yaml.safe_load(conf)
             else:
                 print("Don't know how to load config file", config_file)
+        self.records = records_file or self.config.get('Files', {}).get('Records')
         self.touch_directory = os.path.expanduser(
             os.path.expandvars(
                 touch_directory
@@ -276,6 +295,18 @@ class Practice:
         self.attendees = AttendeeGroup()
         self.methods = {name: asMethod(name) for name in methods or []}
         self._by_method = None
+        if self.records and os.path.exists(self.records):
+            with open(self.records) as recs:
+                try:
+                    self.from_dict(json.load(recs))
+                except json.decoder.JSONDecodeError:
+                    print("Could not load records from", self.records)
+        self.latest_written_touch_number = None
+
+    def do_save(self, _cmd_str=None):
+        if self.records:
+            with open(self.records, 'w') as recs:
+                json.dump(self.to_dict(), recs, indent=4)
 
     def from_dict(self, data):
         """Load this practice from a data dictionary as produced by self.to_dict()."""
@@ -283,6 +314,7 @@ class Practice:
             ringer = self.attendees.ringer(name)
             ringer.learning_status.update(data['learning-status'])
             ringer.email = data.get('email', '')
+        self.latest_written_touch_number = data.get('latest-touch-number', None)
 
     def to_dict(self):
         """Make a JSON-serializable data dictionary representing this practice."""
@@ -292,7 +324,8 @@ class Practice:
             'records': {
                 name: ringer.to_dict()
                 for name, ringer in self.attendees.ringers.items()
-            }
+            },
+            'latest-written-touch-number': self.latest_written_touch_number
             # TODO: perhaps record what was rung at each practice, as
             # a dict keyed by timestamp
         }
@@ -300,11 +333,9 @@ class Practice:
     def add_ringer(self, table_row):
         name = table_row['Name']
         self.attendees.add_ringer(name, table_row['Email'])
-        for raw_method in table_row['Ringing'].split(';'):
-            method = raw_method.strip()
+        for method in _row_methods(table_row, 'Ringing'):
             self.attendees.ringers[name].learning_status[method] = [1] * nbells(method)
-        for i, raw_method in enumerate(table_row['Learning'].split(';')):
-            method = raw_method.strip()
+        for i, method in enumerate(_row_methods(table_row, 'Learning')):
             self.attendees.ringers[name].learning_status[method] = [-1/(i+1)] * nbells(method)
 
     def scores_by_method(self):
@@ -407,7 +438,44 @@ class Practice:
                 placing_learners = True
         return band
 
-    def list_methods(self):
+    def do_place(self, method_name):
+        """Place a band for a specified method."""
+        touch = Touch(practice=self,
+                      method_name=method_name,
+                      ringers=self.place_band(method=method_name))
+        self.latest_written_touch_number = self.next_touch_number()
+        touch.save(self.latest_written_touch_number)
+
+    def do_next(self, cmd_str):
+        """Choose a method and place a band for the next touch."""
+        method_name = self.most_demanded_method_with_band_available()
+        touch = Touch(practice=self,
+                      method_name=method_name,
+                      ringers=self.place_band(method=method_name))
+        self.latest_written_touch_number = self.next_touch_number()
+        touch.save(self.latest_written_touch_number)
+
+    def score_from_touch(self, touch):
+        """Incorporate the scores from a touch file."""
+        pass                    # TODO: fill this in
+
+    def do_score(self, touch_number_str):
+        """Read the scores from a specified touch file."""
+        self.score_from_touch(Touch(practice=self).load(int(touch_number_str)))
+
+    def do_update(self, cmd_str):
+        """Read all the scores that have not yet been read."""
+        pass                    # TODO fill this in
+
+    def do_step(self, cmd_str):
+        """Choose a method, place a band, and read their scores."""
+        self.do_next(cmd_str)
+        subcmd = self.config.get("RingCommand")
+        if subcmd:
+            os.system(subcmd % self.latest_written_touch_number)
+        self.do_update()
+
+    def do_methods(self, cmd_str):
         """List the methods, with their scores."""
         scores = self.scores_by_method()
         for method_name in sorted(scores.keys()):
@@ -416,9 +484,11 @@ class Practice:
             for ringer in sorted(data.keys()):
                 print("  ", ringer, data[ringer])
 
-    def list_ringers_for_method(self, method_name):
+    def do_for(self, cmd_str):
+        print(len(cmd_str), "cmd_str of for are:", cmd_str)
+        method_name = cmd_str.strip()
         print("Ringers for", method_name)
-        ringers = self.method_name_method(method_name)
+        ringers = self.ringers_for_method(method_name)
         for name in sorted(ringers.keys()):
             print("  ", name, ringers[name])
         print("Learners for", method_name)
@@ -438,11 +508,17 @@ class Practice:
                        reverse=True)
         return int(files[0].split('.')[0])+1 if files else 0
 
+    def do_ringers(self, cmd_str):
+        self.attendees.list_ringers()
+
 def get_args():
     """Get the command line arguments."""
     parser = argparse.ArgumentParser(
         description="""Program to help run method-learning change-ringing practices.""")
     # Input data:
+    parser.add_argument(
+        "--config",
+        help="""The name of the configuration file to use.""")
     parser.add_argument(
         "--touch-directory", "-t",
         help="The directory to store touch files in.")
@@ -477,6 +553,9 @@ def get_args():
         "--list-methods", action='store_true')
     parser.add_argument(
         "--ringers-for")
+    parser.add_argument(
+        "action",
+        nargs='*')
     return vars(parser.parse_args())
 
 def practice_main(
@@ -492,17 +571,12 @@ def practice_main(
         score=None,
         ringers_for=None,
         config=None,
+        action=None,
 ):
     """Run a practice action."""
     practice = Practice(config_file=config,
+                        records_file=records,
                         touch_directory=touch_directory)
-    # load initial data:
-    if records and os.path.exists(records):
-        with open(records) as recs:
-            try:
-                practice.from_dict(json.load(recs))
-            except json.decoder.JSONDecodeError:
-                print("Could not load records from", records)
     for method_name in method or []:
         practice.methods[method_name] = asMethod(method_name)
     for ringer_name, ringer_email in ringer or []:
@@ -512,6 +586,7 @@ def practice_main(
             if record.endswith(".csv"):
                 with open(record) as recstr:
                     for row in csv.DictReader(recstr):
+                        print("adding ringer from row", row)
                         practice.add_ringer(row)
             elif record.endswith(".json"):
                 with open(record) as recstr:
@@ -521,21 +596,22 @@ def practice_main(
                 print("Cannot import this type of file:", record)
 
     # practice actions:
-    if list_ringers:
-        practice.attendees.list_ringers()
-    if list_methods:
-        practice.list_methods()
-    if ringers_for:
-        practice.list_ringers_for_method(ringers_for)
-    if place:
-        print(practice.place_band(place))
-    if next:
-        print(practice.place_band(practice.most_demanded_method_with_band_available()))
+    for action_str in action or []:
+        practice.onecmd(action_str)
+
+    # if list_ringers:
+    #     practice.list_ringers()
+    # if list_methods:
+    #     practice.list_methods()
+    # if ringers_for:
+    #     practice.list_ringers_for_method(ringers_for)
+    # if place:
+    #     print(practice.place_band(place))
+    # if next:
+    #     print(practice.place_band(practice.most_demanded_method_with_band_available()))
 
     # save records:
-    if records:
-        with open(records, 'w') as recs:
-            json.dump(practice.to_dict(), recs, indent=4)
+    practice.do_save()
 
 if __name__ == "__main__":
     practice_main(**get_args())

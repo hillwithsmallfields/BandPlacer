@@ -61,7 +61,8 @@ according to learning demand.
 
 Both these commands write a numbered CSV file to the touches
 directory, with columns `Bell` and `Ringer` filled in, and an empty
-`Score` column.
+`Score` column.  There is also a 'Method' column, which is filled in a
+row not containing a ringer placement.
 
 Reading results
 ---------------

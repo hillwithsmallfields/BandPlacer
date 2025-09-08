@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 
-"""Advancing ringing for the rest of us
+"""Advancing ringing for the rest of us.
 
-Code to arrange change-ringing learning sessions for those who don't
-have suitable ringers around them, or whose tower captains hold them
-back.
+Code to arrange change-ringing learning sessions, using spaced
+repetition.
 """
 
 import argparse
@@ -375,6 +374,7 @@ def get_args():
     parser.add_argument(
         "--ringer", "-r",
         action='append',
+        nargs=2,
         help="""Add this ringer to the ringers attending the session.""")
     parser.add_argument(
         "--records", "-R",
@@ -422,8 +422,8 @@ def practice_main(
                 print("Could not load records from", records)
     for method_name in method or []:
         practice.methods[method_name] = asMethod(method_name)
-    for ringer_name in ringer or []:
-        practice.attendees.add_ringer(ringer_name)
+    for ringer_name, ringer_email in ringer or []:
+        practice.attendees.add_ringer(ringer_name, email=ringer_email)
     for record in import_record or []:
         if record and os.path.exists(record):
             with open(record) as recstr:

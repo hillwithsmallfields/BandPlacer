@@ -193,9 +193,21 @@ class Touch:
 
     """A piece of ringing, made up of at least one call."""
 
-    def __init__(self, ringers, calls):
+    def __init__(self, practice, ringers=ringers):
+        self.practice = practice
         self.ringers = ringers
-        self.calls = calls
+
+    def _filename(self, number):
+        return os.path.join(self.practice.touch_directory,
+                            "%06d.csv" % number)
+
+    def save(self, number):
+        with open(self._filename(number), 'w') as ts:
+            writer = csv.DictWriter(ts, fieldnames=['Bell', 'Ringer', 'Score'])
+            pass # TODO
+
+    def load(self, number):
+        pass # TODO
 
 def worst_lead_except(scores, not_these):
     """Return the worst lead for each ringer in the given scores,
@@ -231,7 +243,36 @@ class Practice:
 
     """A session for practicing ringing."""
 
-    def __init__(self, ringers=None, methods=None):
+    def __init__(self,
+                 config_file=None,
+                 touch_directory=None,
+                 ringers=None,
+                 methods=None):
+        self.config = {
+            'Placing': {
+                'Lower': -1,
+                'Upper': 1,
+            },
+            'Scoring': {
+                'Increment': 0.5,
+                'Decrement': 0.4,
+            }
+        }
+        if config_file:
+            if config_file.endswith('.json'):
+                with open(config_file) as conf:
+                    self.config = json.load(conf)
+            elif config_file.endswith('.yaml'):
+                with open(config_file) as conf:
+                    self.config = yaml.safe_load(conf)
+            else:
+                print("Don't know how to load config file", config_file)
+        self.touch_directory = os.path.expanduser(
+            os.path.expandvars(
+                touch_directory
+                or (self.config.get('Files', {})
+                    .get('TouchDirectory', "$HOME/ringing/touches"))))
+        os.makedirs(self.touch_directory, exist_ok=True)
         self.attendees = AttendeeGroup()
         self.methods = {name: asMethod(name) for name in methods or []}
         self._by_method = None
@@ -390,11 +431,21 @@ class Practice:
         for name in sorted(helpers.keys()):
             print("  ", name, helpers[name])
 
+    def next_touch_number(self):
+        files = sorted([filename
+                        for filename in os.listdir(self.touch_directory)
+                        if filename.endswith('.csv')],
+                       reverse=True)
+        return int(files[0].split('.')[0])+1 if files else 0
+
 def get_args():
     """Get the command line arguments."""
     parser = argparse.ArgumentParser(
         description="""Program to help run method-learning change-ringing practices.""")
     # Input data:
+    parser.add_argument(
+        "--touch-directory", "-t",
+        help="The directory to store touch files in.")
     parser.add_argument(
         "--method", "-m",
         action='append',
@@ -430,6 +481,7 @@ def get_args():
 
 def practice_main(
         method=None,
+        touch_directory=None,
         ringer=None,
         records=None,
         import_record=None,
@@ -439,9 +491,11 @@ def practice_main(
         list_methods=False,
         score=None,
         ringers_for=None,
+        config=None,
 ):
     """Run a practice action."""
-    practice = Practice()
+    practice = Practice(config_file=config,
+                        touch_directory=touch_directory)
     # load initial data:
     if records and os.path.exists(records):
         with open(records) as recs:

@@ -3,7 +3,7 @@ Configuring BandPlacer
 
 BandPlacer is configured using a JSON or YAML file.
 
-The main sections are `Files`, `Placing` and `Scoring`.
+The sections are `Files`, `Placing`, `Commands` and `Scoring`.
 
 Files
 -----
@@ -33,3 +33,10 @@ Scoring
 `Scoring:Increment` and `Scoring:Decrement` set the amounts to be
 added or subtracted on successful or unsuccessful completion of a
 place bell.
+
+Commands
+--------
+
+`Commands:RingAndScore` is a format string for a system command to run
+a program to show the placements and gather the scores.  It has one
+`%d` substitution, which is the touch number.

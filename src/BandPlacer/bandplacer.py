@@ -194,15 +194,23 @@ class Touch:
 
     """A piece of ringing, made up of at least one call."""
 
-    def __init__(self, practice, method_name, ringers=None):
+    def __init__(self, practice, method_name=None, ringers=None):
         self.practice = practice
         self.method_name = method_name
         self.ringers = ringers or []
+        self.scores = []
+        self.last_touch = False
+
+    def __str__(self):
+        return "<Touch of %s>" % self.method_name
+
+    def __repr__(self):
+        return "<Touch of %s: %s>" % (self.method_name, ", ".join([("%s: %f" % (r, s)) if s else ("%s" % r)
+                                                                   for r, s in zip(self.ringers, self.scores)]))
 
     def _filename(self, number):
         result = os.path.join(self.practice.touch_directory,
                               "%06d.csv" % number)
-        print("touch filename is", result)
         return result
 
     def save(self, number):
@@ -212,9 +220,31 @@ class Touch:
             writer.writerow({'Method': self.method_name})
             for i, ringer in enumerate(self.ringers):
                 writer.writerow({'Bell': i+1, 'Ringer': ringer})
+        return self
 
     def load(self, number):
-        pass # TODO
+        with open(self._filename(number)) as ts:
+            reader = csv.DictReader(ts)
+            for row in reader:
+                method = row.get('Method')
+                if method:
+                    self.method_name = method
+                    n = nbells(self.method_name)
+                    self.ringers = [None] * n
+                    self.scores = [0] * n
+                bell_str = row.get('Bell')
+                if bell_str == 'Stop':
+                    self.last_touch = True
+                elif bell_str:
+                    bell_index = int(bell_str) - 1
+                    self.ringers[bell_index] = row['Ringer']
+                    score_str = row['Score']
+                    self.scores[bell_index] = float(score_str) if score_str else None
+        return self
+
+    def is_scored(self):
+        """Return whether this touch is fully scored."""
+        return self.scores and not any(score is None for score in self.scores)
 
 def worst_lead_except(scores, not_these):
     """Return the worst lead for each ringer in the given scores,
@@ -266,6 +296,7 @@ class Practice(cmd.Cmd):
                  touch_directory=None,
                  ringers=None,
                  methods=None):
+        self.prompt = "BandPlacer> "
         self.config = {
             'Placing': {
                 'Lower': -1,
@@ -302,11 +333,13 @@ class Practice(cmd.Cmd):
                 except json.decoder.JSONDecodeError:
                     print("Could not load records from", self.records)
         self.latest_written_touch_number = None
+        self.unread_touches = set()
 
     def do_save(self, _cmd_str=None):
         if self.records:
             with open(self.records, 'w') as recs:
                 json.dump(self.to_dict(), recs, indent=4)
+        return False
 
     def from_dict(self, data):
         """Load this practice from a data dictionary as produced by self.to_dict()."""
@@ -377,7 +410,6 @@ class Practice(cmd.Cmd):
                       reverse=True)
 
     def methods_with_band_available(self):
-        print("scores by method are", self.scores_by_method())
         return set([method_name
                     for method_name, scores in self.scores_by_method().items()
                     if len(scores) >= nbells(method_name)])
@@ -444,36 +476,77 @@ class Practice(cmd.Cmd):
                       method_name=method_name,
                       ringers=self.place_band(method=method_name))
         self.latest_written_touch_number = self.next_touch_number()
+        self.unread_touches.add(self.latest_written_touch_number)
         touch.save(self.latest_written_touch_number)
+        return False
 
-    def do_next(self, cmd_str):
+    def do_pick(self, cmd_str):
         """Choose a method and place a band for the next touch."""
         method_name = self.most_demanded_method_with_band_available()
         touch = Touch(practice=self,
                       method_name=method_name,
                       ringers=self.place_band(method=method_name))
         self.latest_written_touch_number = self.next_touch_number()
+        self.unread_touches.add(self.latest_written_touch_number)
         touch.save(self.latest_written_touch_number)
+        return False
 
-    def score_from_touch(self, touch):
-        """Incorporate the scores from a touch file."""
-        pass                    # TODO: fill this in
+    def score_from_touch(self, touch: Touch):
+        """Incorporate the scores from a touch."""
+        method_name = touch.method_name
+        increment = self.config['Scoring']['Increment']
+        decrement = self.config['Scoring']['Decrement']
+        for index, (ringer, score) in enumerate(zip(touch.ringers, touch.scores)):
+            if score is not None:
+                self.attendees.ringer(ringer).adjust_method_place_bell_score(
+                    method_name,
+                    index+1,
+                    ((score * increment)
+                     if score > 0
+                     else -decrement))
+        return True
 
     def do_score(self, touch_number_str):
         """Read the scores from a specified touch file."""
         self.score_from_touch(Touch(practice=self).load(int(touch_number_str)))
+        return False
+
+    def update(self, cmd_str):
+        """Read all the scores that have not yet been read.
+        Returns whether a Stop has been found in any of the score files."""
+        stop_found = False
+        touches_now_read = set()
+        for touch_number in self.unread_touches:
+            touch = Touch(practice=self).load(touch_number)
+            if touch.is_scored():
+                self.score_from_touch(touch)
+                touches_now_read.add(touch_number)
+                if touch.last_touch:
+                    stop_found = True
+        self.unread_touches -= touches_now_read
+        return stop_found
 
     def do_update(self, cmd_str):
-        """Read all the scores that have not yet been read."""
-        pass                    # TODO fill this in
+        """Command to read all the scores that have not yet been read."""
+        self.update(cmd_str)
+        return False
 
-    def do_step(self, cmd_str):
-        """Choose a method, place a band, and read their scores."""
-        self.do_next(cmd_str)
-        subcmd = self.config.get("RingCommand")
+    def do_next(self, cmd_str):
+        """Choose a method, place a band, and read their scores.
+
+        This needs 'RingCommand' to be defined in the config, to a
+        command which will display the placement/scores file and add
+        the scores to it.
+        """
+        subcmd = self.config.get("Commands", {}).get("RingAndScore")
         if subcmd:
+            self.do_pick(cmd_str)
             os.system(subcmd % self.latest_written_touch_number)
-        self.do_update()
+            self.update(cmd_str)
+        else:
+            print("Commands:RingAndScore must be defined in the config to use this command.")
+            return True
+        return False
 
     def do_methods(self, cmd_str):
         """List the methods, with their scores."""
@@ -483,9 +556,9 @@ class Practice(cmd.Cmd):
             data = scores[method_name]
             for ringer in sorted(data.keys()):
                 print("  ", ringer, data[ringer])
+        return False
 
     def do_for(self, cmd_str):
-        print(len(cmd_str), "cmd_str of for are:", cmd_str)
         method_name = cmd_str.strip()
         print("Ringers for", method_name)
         ringers = self.ringers_for_method(method_name)
@@ -500,6 +573,7 @@ class Practice(cmd.Cmd):
         helpers = self.helpers_for_method(method_name)
         for name in sorted(helpers.keys()):
             print("  ", name, helpers[name])
+        return False
 
     def next_touch_number(self):
         files = sorted([filename
@@ -510,6 +584,13 @@ class Practice(cmd.Cmd):
 
     def do_ringers(self, cmd_str):
         self.attendees.list_ringers()
+        return False
+
+    def do_quit(self, cmd_str):
+        return True
+
+    def loop():
+        self.cmdloop()
 
 def get_args():
     """Get the command line arguments."""
@@ -540,19 +621,6 @@ def get_args():
         help="""Import a ringer's record from a JSON file,
         or multiple entries from a CSV file.""")
     # Commands:
-    parser.add_argument(
-        "--place", "--place-for", "-p",
-        help="""Place a band for a specified method.""")
-    parser.add_argument(
-        "--next", "-n",
-        action='store_true',
-        help="""Place a band for the next touch, choosing the method automatically.""")
-    parser.add_argument(
-        "--list-ringers", action='store_true')
-    parser.add_argument(
-        "--list-methods", action='store_true')
-    parser.add_argument(
-        "--ringers-for")
     parser.add_argument(
         "action",
         nargs='*')
@@ -586,7 +654,6 @@ def practice_main(
             if record.endswith(".csv"):
                 with open(record) as recstr:
                     for row in csv.DictReader(recstr):
-                        print("adding ringer from row", row)
                         practice.add_ringer(row)
             elif record.endswith(".json"):
                 with open(record) as recstr:
@@ -597,18 +664,10 @@ def practice_main(
 
     # practice actions:
     for action_str in action or []:
-        practice.onecmd(action_str)
-
-    # if list_ringers:
-    #     practice.list_ringers()
-    # if list_methods:
-    #     practice.list_methods()
-    # if ringers_for:
-    #     practice.list_ringers_for_method(ringers_for)
-    # if place:
-    #     print(practice.place_band(place))
-    # if next:
-    #     print(practice.place_band(practice.most_demanded_method_with_band_available()))
+        if action == 'loop':
+            practice.loop()
+        else:
+            practice.onecmd(action_str)
 
     # save records:
     practice.do_save()

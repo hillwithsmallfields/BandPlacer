@@ -10,8 +10,8 @@ src/bandplacer.py, for ease of installation.
 General
 -------
 
-The command line arguments to bandplacer.py are a mixture of options
-and commands.  More than one command can be given on each run.
+The command line arguments to bandplacer.py include options (given
+with `--`) and commands (at the end of the command line).
 
 Configuration is read from a JSON or YAML file specified with
 `--config`.
@@ -33,7 +33,7 @@ Registration
 ------------
 
 Ringers can be added to the records file individually with the
-`--ringer` option, which takes a name and an email address as its
+`ringer` command, which takes a name and an email address as its
 arguments; or they can be added collectively using `--import` from a
 CSV file, which should include the columns `Name`, `Email`,
 `Learning`, and `Ringing`, the latter two being semicolon-delimited
@@ -47,16 +47,16 @@ with another BandPlacer session.
 Listing the data
 ----------------
 
-The data in the records file can be viewed with the options
-`--list-ringers` and `--list-methods`, and the ringers who are
-learning or can ring a selected method can be listed with the
-`--ringers-for` option, which takes the name of a method.
+The data in the records file can be viewed with the commands `ringers`
+and `methods`, and the ringers who are learning or can ring a selected
+method can be listed with the `for` command, which takes the name of a
+method.
 
 Placing ringers
 ---------------
 
-There are two options for placing a band: `--place`, which takes a
-method name, and `--next`, which chooses the method automatically
+There are two commands for placing a band: `place`, which takes a
+method name, and `--pick`, which chooses the method automatically
 according to learning demand.
 
 Both these commands write a numbered CSV file to the touches
@@ -67,7 +67,29 @@ row not containing a ringer placement.
 Reading results
 ---------------
 
-There are two options for reading the touches files with their
-results: `--score` to read a specific file, and `--update` to read any
+There are two commands for reading the touches files with their
+results: `score` to read a specific file, and `update` to read any
 files in the touch directoy that have not yet been incorporated into
 the records file.
+
+Placing and reading together
+----------------------------
+
+The command `next` will pick a method and place a band as for the
+command `pick`, then run a program or script specified in
+`Commands:RingAndScore` in the configuration, then read any results
+that haven't yet been read, as the `update` command does.
+
+When the specified program or script exits, control returns to
+bandplacer.py, which will then read the (hopefully updated) touch
+file.
+
+The text in `Commands:RingAndScore` should have one `%06d`
+substitution in it, to make the touch file filename, which should
+correspond to a numbered file in the touches directory.  The program
+or script it runs should display the touch file so ringers can see
+which bell they're on and what the method is, then modify the file to
+include the scores once the touch has been rung.  The file is a CSV
+file, so either a spreadsheet program or a text editor should be
+suitable.  This script is also where an interface to HawkEar or
+similar would be placed.

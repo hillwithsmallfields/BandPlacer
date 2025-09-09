@@ -57,5 +57,11 @@ successful lead adds to their score, making it less negative, so they
 are less likely to be placed on that place bell of that method again;
 an unsuccessful lead makes their score for it more negative, which
 will reduce the time before they are placed on it again.  Multiple
-successful attempts at a place bell witll eventually make the score
+successful attempts at a place bell will eventually make the score
 for it positive; they will now count as a helper for that lead.
+
+Further information
+-------------------
+
+ - [Command line manual](doc/command-line-manual.md)
+ - [Configuration](doc/configuration.md)

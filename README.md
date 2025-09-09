@@ -60,8 +60,17 @@ will reduce the time before they are placed on it again.  Multiple
 successful attempts at a place bell will eventually make the score
 for it positive; they will now count as a helper for that lead.
 
+This is meant to focus the learning on the leads (and ringers) that
+need it most.
+
+Scores for individual ringers can be exported for them to download, so
+the tower doesn't need to keep any information long-term (and the
+users can import their data into BandPlanner sessions elsewhere).
+
 Further information
 -------------------
 
  - [Command line manual](doc/command-line-manual.md)
  - [Configuration](doc/configuration.md)
+ - [Usage scenarios](doc/scenarios.md)
+ 

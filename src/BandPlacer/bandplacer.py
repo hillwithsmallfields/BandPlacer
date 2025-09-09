@@ -151,6 +151,11 @@ class Method:
 
     """A change-ringing method."""
 
+    # This class is not yet used --- it will be for connecting to a
+    # row generator so we can show the line / grid to be rung, and use
+    # that for comparison with the rows heard (if we have a mechanism
+    # for hearing rows)
+
     def __init__(self, name: str, stage: int or None):
         self.name = name
         self.stage = stage or nbells(name)
@@ -167,28 +172,6 @@ def asMethod(method):
 
 def asMethodName(method):
     return method.name if isinstance(method, Method) else method
-
-class Call:
-
-    """Anything that can be called during a touch.
-
-    This will normally be a bob, single, or change of method."""
-
-    pass
-
-class Lead(Call):
-
-    """A call to switch to ringing a specified method."""
-
-    def __init__(self, method: Method):
-        self.method = method
-
-class LeadEndVariant(Call):
-
-    """A call, such as a bob or single."""
-
-    def __init__(self, call_type: str):
-        self.call_type = call_type
 
 class Touch:
 
@@ -586,10 +569,23 @@ class Practice(cmd.Cmd):
         self.attendees.list_ringers()
         return False
 
+    def do_import(self, record):
+        if record and os.path.exists(record):
+            if record.endswith(".csv"):
+                with open(record) as recstr:
+                    for row in csv.DictReader(recstr):
+                        self.add_ringer(row)
+            elif record.endswith(".json"):
+                with open(record) as recstr:
+                    rec_data = json.load(recstr)
+                    self.attendees.ringer(rec_data['name']).merge_from_dict(rec_data)
+            else:
+                print("Cannot import this type of file:", record)
+
     def do_quit(self, cmd_str):
         return True
 
-    def loop():
+    def do_loop(self, cmd_str):
         self.cmdloop()
 
 def get_args():
@@ -615,11 +611,6 @@ def get_args():
     parser.add_argument(
         "--records", "-R",
         help="""The file to load training records from and save them to.""")
-    parser.add_argument(
-        "--import-record", "--import", "-i",
-        action='append',
-        help="""Import a ringer's record from a JSON file,
-        or multiple entries from a CSV file.""")
     # Commands:
     parser.add_argument(
         "action",
@@ -634,10 +625,6 @@ def practice_main(
         import_record=None,
         place=None,
         next=False,
-        list_ringers=False,
-        list_methods=False,
-        score=None,
-        ringers_for=None,
         config=None,
         action=None,
 ):
@@ -649,25 +636,9 @@ def practice_main(
         practice.methods[method_name] = asMethod(method_name)
     for ringer_name, ringer_email in ringer or []:
         practice.attendees.add_ringer(ringer_name, email=ringer_email)
-    for record in import_record or []:
-        if record and os.path.exists(record):
-            if record.endswith(".csv"):
-                with open(record) as recstr:
-                    for row in csv.DictReader(recstr):
-                        practice.add_ringer(row)
-            elif record.endswith(".json"):
-                with open(record) as recstr:
-                    rec_data = json.load(recstr)
-                    practice.attendees.ringer(rec_data['name']).merge_from_dict(rec_data)
-            else:
-                print("Cannot import this type of file:", record)
 
     # practice actions:
-    for action_str in action or []:
-        if action == 'loop':
-            practice.loop()
-        else:
-            practice.onecmd(action_str)
+    practice.onecmd(" ".join(action))
 
     # save records:
     practice.do_save()

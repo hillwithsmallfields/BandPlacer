@@ -56,7 +56,7 @@ Placing ringers
 ---------------
 
 There are two commands for placing a band: `place`, which takes a
-method name, and `--pick`, which chooses the method automatically
+method name, and `pick`, which chooses the method automatically
 according to learning demand.
 
 Both these commands write a numbered CSV file to the touches

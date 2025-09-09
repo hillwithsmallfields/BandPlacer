@@ -31,4 +31,5 @@ register and declare their method choices through web forms.
 
 While the session is running, the next band can be displayed on a
 monitor screen in the tower, and the scoring partly automated through
-an interface to HawkEar.
+an interface to HawkEar, with confirmation and intervention through a
+web form.

@@ -88,6 +88,11 @@ class Ringer:
                 else:
                     self.learning_status[method_name] = method_scores
 
+    def export(self, filename):
+        """Export this ringer's data to a file."""
+        with open(filename, 'w') as exp_stream:
+            json.dump(self.to_dict(), exp_stream, indent=4)
+
     def method_learning_status(self, method):
         """Return this ringer's learning status for the specified method.
 
@@ -581,6 +586,19 @@ class Practice(cmd.Cmd):
                     self.attendees.ringer(rec_data['name']).merge_from_dict(rec_data)
             else:
                 print("Cannot import this type of file:", record)
+
+    def do_export(self, ringer_and_file):
+        """Export one ringer's data."""
+        ringer_name, filename = ringer_and_file.split(' ')
+        self.attendees.ringer(ringer_name).export(filename)
+        return False
+
+    def do_export_all(self, cmd_str):
+        """Export all ringers' data."""
+        export_dir = self.config.get('Files', {}).get('ExportDirectory')
+        os.makedirs(export_dir, exist_ok=True)
+        for ringer in self.attendees.ringers.values():
+            ringer.export(os.path.join(export_dir, ringer.name.replace(' ', '_')+".json"))
 
     def do_quit(self, cmd_str):
         return True

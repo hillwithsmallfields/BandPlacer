@@ -40,9 +40,9 @@ CSV file, which should include the columns `Name`, `Email`,
 lists of method names.
 
 Details of a ringer can also be imported from a JSON file with
-`--import`, these files being produced with `--export`, which allows
-ringers to keep their own records and provide them when registering
-with another BandPlacer session.
+`import`, these files being produced with `export` or `export_all`,
+which allows ringers to keep their own records and provide them when
+registering with another BandPlacer session.
 
 Listing the data
 ----------------

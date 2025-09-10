@@ -180,7 +180,7 @@ def asMethodName(method):
 
 class Touch:
 
-    """A piece of ringing, made up of at least one call."""
+    """A piece of ringing, made up of at least one lead."""
 
     def __init__(self, practice, method_name=None, ringers=None):
         self.practice = practice

@@ -202,6 +202,7 @@ class Touch:
         return result
 
     def save(self, number):
+        """Write the band placement for this touch, to a tabular file."""
         with open(self._filename(number), 'w') as ts:
             writer = csv.DictWriter(ts, fieldnames=['Bell', 'Ringer', 'Score', 'Method'])
             writer.writeheader()
@@ -211,6 +212,7 @@ class Touch:
         return self
 
     def load(self, number):
+        """Read a band placement file, hopefully with the scores added."""
         with open(self._filename(number)) as ts:
             reader = csv.DictReader(ts)
             for row in reader:
@@ -324,6 +326,7 @@ class Practice(cmd.Cmd):
         self.unread_touches = set()
 
     def do_save(self, _cmd_str=None):
+        """Save a practice session to a file."""
         if self.records:
             with open(self.records, 'w') as recs:
                 json.dump(self.to_dict(), recs, indent=4)
@@ -352,6 +355,7 @@ class Practice(cmd.Cmd):
         }
 
     def add_ringer(self, table_row):
+        """Add a ringer to this practice."""
         name = table_row['Name']
         self.attendees.add_ringer(name, table_row['Email'])
         for method in _row_methods(table_row, 'Ringing'):
@@ -369,6 +373,8 @@ class Practice(cmd.Cmd):
         return self._by_method
 
     def ringers_for_method(self, method):
+        """Return the ringers who can ring, or want to learn, a specified method.
+        The result is a dict binding their names to their scores."""
         return self.scores_by_method()[asMethodName(method)]
 
     def learners_for_method(self, method):
@@ -398,6 +404,8 @@ class Practice(cmd.Cmd):
                       reverse=True)
 
     def methods_with_band_available(self):
+        """Return, as a set of method names, the methods for which there are enough ringers
+        (including learners)."""
         return set([method_name
                     for method_name, scores in self.scores_by_method().items()
                     if len(scores) >= nbells(method_name)])

@@ -1,6 +1,6 @@
 import os
 
-from flask import Flask
+from flask import Flask, render_template
 
 # based on https://flask.palletsprojects.com/en/stable/tutorial/factory/
 
@@ -19,14 +19,17 @@ def create_app(test_config=None):
 
     os.makedirs(app.instance_path, exist_ok=True)
 
-    @app.route('/hello')
-    def hello():
-        return "Hello, World!"
+    @app.route('/')
+    def home():
+        return render_template('home.html')
 
     from . import db
     db.init_app(app)
 
     from . import auth
     app.register_blueprint(auth.bp)
+
+    from . import user
+    app.register_blueprint(user.bp)
 
     return app

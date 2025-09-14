@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# Script to do my current development run of bandplacer.
+# Liable to change without notice.
+
+# start afresh each run:
+RECORDS=/tmp/records.json
+
+rm -f $RECORDS /tmp/touches/*
+
+CONFIG=../../testdata/sample_config.json
+
+./bandplacer.py --config $CONFIG import ../../testdata/histon.csv
+./bandplacer.py --config $CONFIG ringers
+./bandplacer.py --config $CONFIG for Cambridge Surprise Major
+./bandplacer.py --config $CONFIG place Cambridge Surprise Major
+./bandplacer.py --config $CONFIG pick
+./bandplacer.py --config $CONFIG pick
+./bandplacer.py --config $CONFIG score 1
+./bandplacer.py --config $CONFIG next
+./bandplacer.py --config $CONFIG export_all
+

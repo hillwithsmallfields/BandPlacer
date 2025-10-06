@@ -88,6 +88,9 @@ class Ringer:
                 else:
                     self.learning_status[method_name] = method_scores
 
+    def save_to_db(self, method):
+        """Update the DB records of this ringer for a given method."""
+
     def export(self, filename):
         """Export this ringer's data to a file."""
         with open(filename, 'w') as exp_stream:
@@ -108,13 +111,22 @@ class Ringer:
             self.learning_status[method_name] = [0.0] * nbells(method_name)
         return self.learning_status[method_name]
 
+    def add_method(self, method_name, scores):
+        """Add a method learning status for this ringer."""
+        self.learning_status[asMethodName(method)] = [float(score) for score in scores]
+        return self
+
     def set_method_place_bell_score(self, method, place_bell, score):
         """Set this ringer's score for a place bell of a method."""
         self.method_learning_status(method)[place_bell-1] = score
+        self.save_to_db(method)
+        return self
 
     def adjust_method_place_bell_score(self, method, place_bell, score_increment):
         """Adjust this ringer's score for a place bell of a method."""
         self.method_learning_status(method)[place_bell-1] += score_increment
+        self.save_to_db(method)
+        return self
 
 class AttendeeGroup:
 
@@ -185,6 +197,12 @@ class Touch:
     def __init__(self, practice, method_name=None, ringers=None):
         self.practice = practice
         self.method_name = method_name
+        # The 'ringers' array starts with the treble in element 0.
+        # Each entry is a list of ringers suggested for this bell, in
+        # descending order of choice.  The idea is for the UI to put
+        # them into a dropdown, with the first in the list as the
+        # selected item; the tower captain can then change the
+        # placements at their discretion.
         self.ringers = ringers or []
         self.scores = []
         self.last_touch = False
@@ -201,18 +219,27 @@ class Touch:
                               "%06d.csv" % number)
         return result
 
-    def save(self, number):
-        """Write the band placement for this touch, to a tabular file."""
+    def save_placements_to_file(self, number):
+        """Write the band placement for this touch, to a tabular file.
+
+        The file can then be displayed by some other system, such as a
+        spreadsheet application; this is intended for running
+        BandPlacer without a GUI.
+        """
         with open(self._filename(number), 'w') as ts:
             writer = csv.DictWriter(ts, fieldnames=['Bell', 'Ringer', 'Score', 'Method'])
             writer.writeheader()
             writer.writerow({'Method': self.method_name})
             for i, ringer in enumerate(self.ringers):
-                writer.writerow({'Bell': i+1, 'Ringer': ringer})
+                writer.writerow({'Bell': i+1, 'Ringer': ringer[0]})
         return self
 
-    def load(self, number):
-        """Read a band placement file, hopefully with the scores added."""
+    def load_from_file(self, number):
+        """Read a band placement file, hopefully with the scores added.
+
+        As with `save_placements_to_file`, this is for running
+        BandPlacer without a GUI.
+        """
         with open(self._filename(number)) as ts:
             reader = csv.DictReader(ts)
             for row in reader:
@@ -231,6 +258,29 @@ class Touch:
                     score_str = row['Score']
                     self.scores[bell_index] = float(score_str) if score_str else None
         return self
+
+    def suggested_placements(self):
+        """Return the suggested placements.
+
+        This assumes they have been set; this should have been done by
+        the caller of the Touch() constructor.
+        """
+        return self.ringers
+
+    def receive_scores(self, scores):
+        """Receive the scores at the end of a touch.
+
+        The scores come in as a dictionary binding ringer names to the
+        score values, and are used to modify those ringers' records.
+
+        The scores are in a dictionary by name, rather than a list by
+        bell number, because the tower captain may have changed the
+        placements from the suggested ones.
+        """
+        attendees = self.practice.attendees
+        for ringer_name, score_increment in scores.items():
+            attendees.ringer(ringer_name).adjust_method_place_bell_score(self.method, score_increment)
+            # TODO: also set the score array elements
 
     def is_scored(self):
         """Return whether this touch is fully scored."""
@@ -445,10 +495,11 @@ class Practice(cmd.Cmd):
                 most_needs_practice = key_of_lowest_value(each_worst_lead)
                 bell_to_allocate = each_worst_lead[most_needs_practice]
                 worst_lead_score = learners[most_needs_practice][bell_to_allocate]
+                # TODO: put a list of ringers here, in decreasing order of needing practice
                 band[bell_to_allocate] = most_needs_practice
                 band_scores[bell_to_allocate] = worst_lead_score
                 del learners[most_needs_practice]
-            else:
+            else:               # placing helpers
                 for i, p in enumerate(band):
                     if not p:
                         # place a helper
